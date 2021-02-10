@@ -1,4 +1,4 @@
-
+"""Training script adapted from https://github.com/HeatherJiaZG/SuperGlue-pytorch"""
 from pathlib import Path
 import argparse
 import random
