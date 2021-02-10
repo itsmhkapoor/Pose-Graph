@@ -10,12 +10,14 @@ import torch
 from torch import nn
 
 def transform_graph(keypoints, num_keyframes, R, t):
+    """Transform a posegraph with Rotation (R) and translation (t)"""
     keypoints = keypoints[0:2,:]
     dist_array = t.repeat(1,num_keyframes)
     new_keypoints = torch.mm(R.cuda(), keypoints)+dist_array.cuda()
     return new_keypoints
 
 def rigidH(x, y, w):
+    """Compute rigid homographic transformation from posegraph x to y"""
     xt = torch.transpose(x,0,1)
     c = w * xt
     num_pts = x.size()[1]
@@ -37,7 +39,7 @@ def rigidH(x, y, w):
     return R, t
 
 def ransacRigidH(x1, x2, w):
-
+    """For RANSAC to compute weighted mean error"""
     x1 = torch.transpose(x1,0,1)
     x2 = torch.transpose(x2,0,1)
     num_pts = x1.size()[1]  # Total number of points
@@ -93,11 +95,8 @@ class KeypointEncoder(nn.Module):
 def attention(query, key, value):
     dim = query.shape[1]
     scores = torch.einsum('bdhn,bdhm->bhnm', query, key) / dim**.5
-    # if name == 'self':
-    #     prob = torch.add(self_prob,torch.nn.functional.softmax(scores, dim=-1),alpha=0.5)
-    # else:
     prob = torch.nn.functional.softmax(scores, dim=-1)
-    # print(torch.sum(prob, 3)) #returns the sum along each row and is equal to 1.
+
     return torch.einsum('bhnm,bdhm->bdhn', prob, value), prob
 
 
@@ -232,12 +231,6 @@ class SuperGlue(nn.Module):
         bin_score = torch.nn.Parameter(torch.tensor(1.))
         self.register_parameter('bin_score', bin_score)
 
-        # assert self.config['weights'] in ['indoor', 'outdoor']
-        # path = Path(__file__).parent
-        # path = path / 'weights/superglue_{}.pth'.format(self.config['weights'])
-        # self.load_state_dict(torch.load(path))
-        # print('Loaded SuperGlue model (\"{}\" weights)'.format(
-        #     self.config['weights']))
 
     def forward(self, data):
         """Run SuperGlue on a pair of keypoints and descriptors"""
@@ -245,8 +238,6 @@ class SuperGlue(nn.Module):
         kpts0, kpts1 = data['keypoints0'].double(), data['keypoints1'].double()
         dscores0, dscores1 = data['scores0'].double(), data['scores1'].double()
 
-        # desc0 = desc0.transpose(0,1)
-        # desc1 = desc1.transpose(0,1)
         kpts0 = torch.reshape(kpts0, (1, -1, 3))
         kpts1 = torch.reshape(kpts1, (1, -1, 3))
         desc0 = torch.reshape(desc0, (1, 256, -1))
@@ -254,10 +245,7 @@ class SuperGlue(nn.Module):
         dscores0 = torch.reshape(dscores0, (1, -1))
         dscores1 = torch.reshape(dscores1, (1, -1))
         print("SuperGlue begins")
-        # print(kpts0.size())
-        # print(desc0.size())
-        # print(dscores1.size())
-    
+
         if kpts0.shape[1] == 0 or kpts1.shape[1] == 0:  # no keypoints
             shape0, shape1 = kpts0.shape[:-1], kpts1.shape[:-1]
             return {
@@ -268,20 +256,10 @@ class SuperGlue(nn.Module):
                 'skip_train': True
             }
 
-        # file_name = data['file_name']
-        # all_matches = data['all_matches'].permute(1,2,0) # shape=torch.Size([1, 87, 2])
         all_matches = data['all_matches']
         all_matches = torch.reshape(all_matches, (1, -1, 2))
-        # self_prob = torch.empty(1,4,158,158) #test self_prob passing
-        # print(all_matches.size())
-        
-        # Keypoint normalization.
-        # kpts0 = normalize_keypoints(kpts0, data['image0'].shape)
-        # kpts1 = normalize_keypoints(kpts1, data['image1'].shape)
 
-        # Keypoint MLP encoder.
-        # desc0 = desc0 + self.kenc(kpts0, torch.transpose(data['scores0'], 0, 1))
-        # desc1 = desc1 + self.kenc(kpts1, torch.transpose(data['scores1'], 0, 1))
+        # Keyframe encoder
         desc0 = desc0 + self.kenc(kpts0, dscores0)
         desc1 = desc1 + self.kenc(kpts1, dscores1)
 
@@ -323,17 +301,16 @@ class SuperGlue(nn.Module):
 
         w_mean_ssd, R, t = ransacRigidH(mkpts0, mkpts1, weights)
 
-        # check if indexed correctly
         loss = []
         for i in range(len(all_matches[0])):
             x = all_matches[0][i][0]
             y = all_matches[0][i][1]
-            loss.append(-torch.log( scores[0][x][y].exp() )) # check batch size == 1 ?
+            loss.append(-torch.log( scores[0][x][y].exp() ))
         # for p0 in unmatched0:
         #     loss += -torch.log(scores[0][p0][-1])
         # for p1 in unmatched1:
         #     loss += -torch.log(scores[0][-1][p1])
-        loss_mean = torch.mean(torch.stack(loss)) + 0.05*w_mean_ssd
+        loss_mean = torch.mean(torch.stack(loss)) + 0.05*w_mean_ssd # Modified Loss function where lambda is 0.05
         loss_mean = torch.reshape(loss_mean, (1, -1))
 
         return {
@@ -347,4 +324,4 @@ class SuperGlue(nn.Module):
             'skip_train': False
         }
 
-        # scores big value or small value means confidence? log can't take neg value
+
