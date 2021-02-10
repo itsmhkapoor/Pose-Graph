@@ -26,15 +26,6 @@ from models.matchingForTraining import MatchingForTraining
 
 torch.set_grad_enabled(True)
 torch.multiprocessing.set_sharing_strategy('file_system')
-# os.environ["CUDA_VISIBLE_DEVICES"]="0"
-# torch.multiprocessing.set_start_method("spawn")
-# torch.cuda.set_device(0)
-
-# try:
-#     torch.multiprocessing.set_start_method('spawn')
-# except RuntimeError:
-#     pass
-
 
 parser = argparse.ArgumentParser(
     description='Image pair matching and pose evaluation with SuperGlue',
@@ -204,48 +195,6 @@ if __name__ == '__main__':
             mean_loss.append(Loss) # every 10 pairs
             Loss.backward()
             optimizer.step()
-
-
-
-            if (i+1) % 100 == 0:
-                print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
-                    .format(epoch, opt.epoch, i+1, len(train_loader), torch.mean(torch.stack(mean_loss)).item()))   # Loss.item()    
-                mean_loss = []
-
-                ### eval ###
-                # Visualize the matches.
-                superglue.eval()
-                image0, image1 = pred['image0'].cpu().numpy()[0]*255., pred['image1'].cpu().numpy()[0]*255.
-                kpts0, kpts1 = pred['keypoints0'].cpu().numpy()[0], pred['keypoints1'].cpu().numpy()[0]
-                matches, conf = pred['matches0'].cpu().detach().numpy(), pred['matching_scores0'].cpu().detach().numpy()
-                image0 = read_image_modified(image0, opt.resize, opt.resize_float)
-                image1 = read_image_modified(image1, opt.resize, opt.resize_float)
-                valid = matches > -1
-                mkpts0 = kpts0[valid]
-                mkpts1 = kpts1[matches[valid]]
-                mconf = conf[valid]
-                viz_path = eval_output_dir / '{}_matches.{}'.format(str(i), opt.viz_extension)
-                color = cm.jet(mconf)
-                stem = pred['file_name']
-                text = []
-
-                make_matching_plot(
-                    image0, image1, kpts0, kpts1, mkpts0, mkpts1, color,
-                    text, viz_path, stem, stem, opt.show_keypoints,
-                    opt.fast_viz, opt.opencv_display, 'Matches')
-
-
-
-                # Estimate the pose and compute the pose error.
-                
-
-
-
-            if (i+1) % 5e3 == 0:
-                model_out_path = "/scratch_net/munzekonza/mkapoor/model_allseq_epoch_{}.pth".format(epoch)
-                torch.save(superglue, model_out_path)
-                print ('Epoch [{}/{}], Step [{}/{}], Checkpoint saved to {}' 
-                    .format(epoch, opt.epoch, i+1, len(train_loader), model_out_path)) 
 
             end = time.time()
             print("Iteration time: ",(end-start))
