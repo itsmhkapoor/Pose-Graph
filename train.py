@@ -11,18 +11,6 @@ from load_data import SparseDataset
 import os
 import time
 import torch.multiprocessing
-from tqdm import tqdm
-
-# from models.matching import Matching
-from models.utils import (compute_pose_error, compute_epipolar_error,
-                          estimate_pose, make_matching_plot,
-                          error_colormap, AverageTimer, pose_auc, read_image,
-                          rotate_intrinsics, rotate_pose_inplane,
-                          scale_intrinsics)
-
-#from models.superpoint import SuperPoint
-from models.superglue import SuperGlue
-from models.matchingForTraining import MatchingForTraining
 
 torch.set_grad_enabled(True)
 torch.multiprocessing.set_sharing_strategy('file_system')
