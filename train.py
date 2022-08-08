@@ -1,14 +1,9 @@
-"""Training script adapted from https://github.com/HeatherJiaZG/SuperGlue-pytorch"""
 from pathlib import Path
 import argparse
-import random
-import numpy as np
-import matplotlib.cm as cm
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from load_data import SparseDataset
-import os
 import time
 import torch.multiprocessing
 
@@ -16,16 +11,8 @@ torch.set_grad_enabled(True)
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 parser = argparse.ArgumentParser(
-    description='Image pair matching and pose evaluation with SuperGlue',
+    description='Pose Graph Matching',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-parser.add_argument(
-    '--viz', action='store_true',
-    help='Visualize the matches and dump the plots')
-parser.add_argument(
-    '--eval', action='store_true',
-    help='Perform the evaluation'
-            ' (requires ground truth pose and intrinsics)')
 
 parser.add_argument(
     '--superglue', choices={'indoor', 'outdoor'}, default='indoor',
@@ -114,14 +101,6 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     print(opt)
 
-    assert not (opt.opencv_display and not opt.viz), 'Must use --viz with --opencv_display'
-    assert not (opt.opencv_display and not opt.fast_viz), 'Cannot use --opencv_display without --fast_viz'
-    assert not (opt.fast_viz and not opt.viz), 'Must use --viz with --fast_viz'
-    assert not (opt.fast_viz and opt.viz_extension == 'pdf'), 'Cannot use pdf extension with --fast_viz'
-
-
-
-    # store viz results
     model_save_path = "/scratch_net/munzekonza/mkapoor/seq_1_weighted_ransac/"
     eval_output_dir = Path(opt.eval_output_dir)
     eval_output_dir.mkdir(exist_ok=True, parents=True)
