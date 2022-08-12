@@ -187,7 +187,7 @@ def arange_like(x, dim: int):
     return x.new_ones(x.shape[dim]).cumsum(0) - 1  # traceable in 1.1
 
 
-class SuperGlue(nn.Module):
+class Matcher(nn.Module):
     """SuperGlue feature matching middle-end
 
     Given two sets of keypoints and locations, we determine the

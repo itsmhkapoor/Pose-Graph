@@ -7,6 +7,8 @@ from load_data import SparseDataset
 import time
 import torch.multiprocessing
 
+from models.matcher import Matcher
+
 torch.set_grad_enabled(True)
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -16,67 +18,22 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument(
     '--sinkhorn_iterations', type=int, default=20,
-    help='Number of Sinkhorn iterations performed by SuperGlue')
+    help='Number of Sinkhorn iterations performed by Matcher')
 parser.add_argument(
     '--match_threshold', type=float, default=0.2,
-    help='SuperGlue match threshold')
-
-parser.add_argument(
-    '--resize', type=int, nargs='+', default=[640, 480],
-    help='Resize the input image before running inference. If two numbers, '
-            'resize to the exact dimensions, if one number, resize the max '
-            'dimension, if -1, do not resize')
-parser.add_argument(
-    '--resize_float', action='store_true',
-    help='Resize the image after casting uint8 to float')
-
-parser.add_argument(
-    '--cache', action='store_true',
-    help='Skip the pair if output .npz files are already found')
-parser.add_argument(
-    '--show_keypoints', action='store_true',
-    help='Plot the keypoints in addition to the matches')
-parser.add_argument(
-    '--fast_viz', action='store_true',
-    help='Use faster image visualization based on OpenCV instead of Matplotlib')
-parser.add_argument(
-    '--viz_extension', type=str, default='png', choices=['png', 'pdf'],
-    help='Visualization file extension. Use pdf for highest-quality.')
-
-parser.add_argument(
-    '--opencv_display', action='store_true',
-    help='Visualize via OpenCV before saving output images')
-parser.add_argument(
-    '--eval_pairs_list', type=str, default='assets/scannet_sample_pairs_with_gt.txt',
-    help='Path to the list of image pairs for evaluation')
-parser.add_argument(
-    '--shuffle', action='store_true',
-    help='Shuffle ordering of pairs before processing')
-parser.add_argument(
-    '--max_length', type=int, default=-1,
-    help='Maximum number of pairs to evaluate')
-
-parser.add_argument(
-    '--eval_input_dir', type=str, default='assets/scannet_sample_images/',
-    help='Path to the directory that contains the images')
-parser.add_argument(
-    '--eval_output_dir', type=str, default='dump_match_pairs/',
-    help='Path to the directory in which the .npz results and optional,'
-            'visualizations are written')
+    help='Match threshold')
 parser.add_argument(
     '--learning_rate', type=int, default=0.0001,
     help='Learning rate')
-
-    
 parser.add_argument(
     '--batch_size', type=int, default=1,
     help='batch_size')
 parser.add_argument(
-    '--data_path', type=str, default='/scratch_net/munzekonza/mkapoor/freiburg/', # MSCOCO2014_yingxin
+    '--data_path', type=str, default='path/to/freiburg/data', # MSCOCO2014_yingxin
     help='Path to the directory of training imgs.')
-# parser.add_argument(
-#     '--nfeatures', type=int, default=1024,
-#     help='Number of feature points to be extracted initially, in each img.')
+parser.add_argument(
+    '--model_save_path', type=str, default='/ckpt/',
+    help='Path to save model checkpoint')
 parser.add_argument(
     '--epoch', type=int, default=20,
     help='Number of epoches')
@@ -87,13 +44,10 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     print(opt)
 
-    model_save_path = "/scratch_net/munzekonza/mkapoor/seq_1_weighted_ransac/"
-    eval_output_dir = Path(opt.eval_output_dir)
-    eval_output_dir.mkdir(exist_ok=True, parents=True)
     print('Will save model to',
-        'directory \"{}\"'.format(model_save_path))
+        'directory \"{}\"'.format(opt.model_save_path))
     config = {
-        'superglue': {
+        'matcher': {
             'sinkhorn_iterations': opt.sinkhorn_iterations,
             'match_threshold': opt.match_threshold,
         }
@@ -102,19 +56,17 @@ if __name__ == '__main__':
     train_set = SparseDataset(opt.data_path, opt.max_keypoints)
     train_loader = torch.utils.data.DataLoader(dataset=train_set, shuffle=False, batch_size=opt.batch_size, drop_last=True)
 
-    # superpoint = SuperPoint(config.get('superpoint', {}))
-    superglue = SuperGlue(config.get('superglue', {}))
+    matcher = Matcher(config.get('matcher', {}))
     if torch.cuda.is_available():
-        # superpoint.cuda()
-        superglue.cuda()
+        matcher.cuda()
     else:
         print("### CUDA not available ###")
-    optimizer = torch.optim.Adam(superglue.parameters(), lr=opt.learning_rate)
+    optimizer = torch.optim.Adam(matcher.parameters(), lr=opt.learning_rate)
 
     mean_loss = []
     for epoch in range(1, opt.epoch+1):
         epoch_loss = 0
-        superglue.double().train()
+        matcher.double().train()
         # train_loader = tqdm(train_loader)
         for i, pred in enumerate(train_loader):
             start = time.time()
@@ -127,7 +79,7 @@ if __name__ == '__main__':
                         pred[k] = Variable(torch.stack(pred[k]).cuda())
                         # pred[k] = Variable(torch.stack(pred[k])) # No cuda
                 
-            data = superglue(pred)
+            data = matcher(pred)
 
             for k, v in pred.items():
                 pred[k] = v[0]
@@ -136,7 +88,7 @@ if __name__ == '__main__':
             if pred['skip_train'] == True: # image has no keypoint
                 continue
 
-            superglue.zero_grad()
+            matcher.zero_grad()
             Loss = pred['loss']
             epoch_loss += Loss.item()
             mean_loss.append(Loss) # every 10 pairs
@@ -146,8 +98,8 @@ if __name__ == '__main__':
             end = time.time()
             print("Iteration time: ",(end-start))
         epoch_loss /= len(train_loader)
-        model_out_path = "/scratch_net/munzekonza/mkapoor/correct_match/seq_1_weighted_ransac/model_rand_512_L_0.05_epoch_{}.pth".format(epoch)
-        torch.save(superglue, model_out_path)
+        model_out_path = "path/to/modelckpt_epoch_{}.pth".format(epoch)
+        torch.save(matcher, model_out_path)
         print("Epoch [{}/{}] done. Epoch Loss {}. Checkpoint saved to {} for lambda 0.05"
             .format(epoch, opt.epoch, epoch_loss, model_out_path))
         
