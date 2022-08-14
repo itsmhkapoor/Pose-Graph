@@ -63,21 +63,25 @@ if __name__ == '__main__':
         print("### CUDA not available ###")
     optimizer = torch.optim.Adam(matcher.parameters(), lr=opt.learning_rate)
 
-    mean_loss = []
+    
     for epoch in range(1, opt.epoch+1):
         epoch_loss = 0
         matcher.double().train()
-        # train_loader = tqdm(train_loader)
+        
         for i, pred in enumerate(train_loader):
             start = time.time()
             for k in pred:
                 if k != 'file_name' and k!='image0' and k!='image1':
                     if type(pred[k]) == torch.Tensor:
-                        pred[k] = Variable(pred[k].cuda())
-                        # pred[k] = Variable(pred[k])
+                        if torch.cuda.is_available():
+                            pred[k] = Variable(pred[k].cuda())
+                        else:
+                            pred[k] = Variable(pred[k])
                     else:
-                        pred[k] = Variable(torch.stack(pred[k]).cuda())
-                        # pred[k] = Variable(torch.stack(pred[k])) # No cuda
+                        if torch.cuda.is_available():
+                            pred[k] = Variable(torch.stack(pred[k]).cuda())
+                        else:
+                            pred[k] = Variable(torch.stack(pred[k])) # No cuda
                 
             data = matcher(pred)
 
@@ -85,13 +89,12 @@ if __name__ == '__main__':
                 pred[k] = v[0]
             pred = {**pred, **data}
 
-            if pred['skip_train'] == True: # image has no keypoint
+            if pred['skip_train'] == True: # Posegraph empty
                 continue
 
             matcher.zero_grad()
             Loss = pred['loss']
             epoch_loss += Loss.item()
-            mean_loss.append(Loss) # every 10 pairs
             Loss.backward()
             optimizer.step()
 

@@ -69,18 +69,8 @@ def MLP(channels: list, do_bn=True):
     return nn.Sequential(*layers)
 
 
-def normalize_keypoints(kpts, image_shape):
-    """ Normalize keypoints locations based on image image_shape"""
-    _, _, height, width = image_shape
-    one = kpts.new_tensor(1)
-    size = torch.stack([one*width, one*height])[None]
-    center = size / 2
-    scaling = size.max(1, keepdim=True).values * 0.7
-    return (kpts - center[:, None, :]) / scaling[:, None, :]
-
-
-class KeypointEncoder(nn.Module):
-    """ Joint encoding of visual appearance and location using MLPs"""
+class KeyframeEncoder(nn.Module):
+    """ Encoding of Keyframes using MLPs"""
     def __init__(self, feature_dim, layers):
         super().__init__()
         self.encoder = MLP([4] + layers + [feature_dim])
@@ -188,11 +178,11 @@ def arange_like(x, dim: int):
 
 
 class Matcher(nn.Module):
-    """SuperGlue feature matching middle-end
+    """
 
-    Given two sets of keypoints and locations, we determine the
+    Given two sets of image (keyframe) locations and descriptors, we determine the
     correspondences by:
-      1. Keypoint Encoding (normalization + visual feature and location fusion)
+      1. Keyframe Encoding 
       2. Graph Neural Network with multiple self and cross-attention layers
       3. Final projection layer
       4. Optimal Transport Layer (a differentiable Hungarian matching algorithm)
@@ -200,15 +190,11 @@ class Matcher(nn.Module):
 
     The correspondence ids use -1 to indicate non-matching points.
 
-    Paul-Edouard Sarlin, Daniel DeTone, Tomasz Malisiewicz, and Andrew
-    Rabinovich. SuperGlue: Learning Feature Matching with Graph Neural
-    Networks. In CVPR, 2020. https://arxiv.org/abs/1911.11763
-
     """
     default_config = {
         'descriptor_dim': 256,
         'weights': 'indoor',
-        'keypoint_encoder': [32, 64, 128, 256],
+        'keyframe_encoder': [32, 64, 128, 256],
         'GNN_layers': ['self', 'cross'] * 9,
         'sinkhorn_iterations': 100,
         'match_threshold': 0.2,
@@ -218,8 +204,8 @@ class Matcher(nn.Module):
         super().__init__()
         self.config = {**self.default_config, **config}
 
-        self.kenc = KeypointEncoder(
-            self.config['descriptor_dim'], self.config['keypoint_encoder'])
+        self.kenc = KeyframeEncoder(
+            self.config['descriptor_dim'], self.config['keyframe_encoder'])
 
         self.gnn = AttentionalGNN(
             self.config['descriptor_dim'], self.config['GNN_layers'])
@@ -278,7 +264,7 @@ class Matcher(nn.Module):
             scores, self.bin_score,
             iters=self.config['sinkhorn_iterations'])
 
-        # Get the matches with score above "match_threshold".
+        # Get the matches 
         max0, max1 = scores[:, :-1, :-1].max(2), scores[:, :-1, :-1].max(1)
         indices0, indices1 = max0.indices, max1.indices
         mutual0 = arange_like(indices0, 1)[None] == indices1.gather(1, indices0)
@@ -292,8 +278,7 @@ class Matcher(nn.Module):
         indices0 = torch.where(valid0, indices0, indices0.new_tensor(-1))
         indices1 = torch.where(valid1, indices1, indices1.new_tensor(-1))
 
-        # RANSAC for training
-
+        # RANSAC while training
         valid0 = indices0 > -1
         mkpts0 = kpts0[valid0]
         mkpts1 = kpts1[0, indices0[valid0], :] # N'x3 size
