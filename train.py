@@ -102,7 +102,12 @@ if __name__ == '__main__':
             print("Iteration time: ",(end-start))
         epoch_loss /= len(train_loader)
         model_out_path = "path/to/modelckpt_epoch_{}.pth".format(epoch)
-        torch.save(matcher, model_out_path)
+        torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': matcher.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': Loss
+                    }, model_out_path) # save checkpoint
         print("Epoch [{}/{}] done. Epoch Loss {}. Checkpoint saved to {} for lambda 0.05"
             .format(epoch, opt.epoch, epoch_loss, model_out_path))
         

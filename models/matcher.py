@@ -219,7 +219,7 @@ class Matcher(nn.Module):
 
 
     def forward(self, data):
-        """Run SuperGlue on a pair of keypoints and descriptors"""
+        """Run Matcher on a pair of keypoints and descriptors"""
         desc0, desc1 = data['descriptors0'].double(), data['descriptors1'].double()
         kpts0, kpts1 = data['keypoints0'].double(), data['keypoints1'].double()
         dscores0, dscores1 = data['scores0'].double(), data['scores1'].double()
@@ -230,7 +230,7 @@ class Matcher(nn.Module):
         desc1 = torch.reshape(desc1, (1, 256, -1))
         dscores0 = torch.reshape(dscores0, (1, -1))
         dscores1 = torch.reshape(dscores1, (1, -1))
-        print("SuperGlue begins")
+        print("Matcher begins")
 
         if kpts0.shape[1] == 0 or kpts1.shape[1] == 0:  # no keypoints
             shape0, shape1 = kpts0.shape[:-1], kpts1.shape[:-1]
