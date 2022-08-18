@@ -45,6 +45,11 @@ The performance of the network for different angles of rigid transformation betw
 | Header      | Title       |
 | Paragraph   | Text        |
 
+| Evaluation Metric | Applied Angle |                                                                 
+| -- | -- | -- | -- |                                                                                                   
+| RMSE | 1 | 2 | 3 |                                                                   
+
+
 <p align="center">
   <img src="assets/angle.png" width="300">
   <img src="assets/dist.png" width="300">
