@@ -10,7 +10,11 @@ The [COLD](https://www.coldb.org/site/metadata/) dataset was used. The Freiburg 
 
 ## Model
 
-The `model/superglue.py` file contains the model and loss function including RANSAC.
+The `model/superglue.py` file contains the model and loss function including RANSAC. The model architecture is as shown.
+
+<p align="center">
+  <img src="assets/Architecture.png" width="700">
+</p>
 
 ## Training and Testing
 
@@ -24,3 +28,17 @@ The `test.py` runs over 100 test sub-sequences from Sequence 3 of Freiburg and s
 
 ## Results
 
+As a post-processing step, RANSAC is applied on the rigid transformation to filter out the mis-matched keyframes by the network. The network output and the RANSAC filtered results are shown below for the test case. As it can be seen there are a lot of mis-matches by the network and hence post-processing is essential.
+<p align="center">
+  <img src="assets/10_before.png" width="400">
+  <img src="assets/10_after.png" width="400">
+  <img src="assets/matched.png" width="400">
+</p>
+
+The performance of the network for different angles of rigid transformation between the pose graphs is highlighted in the following figures. On a general note it can be seen that the error values increase with larger rigid transformations.
+<p align="center">
+  <img src="assets/angle.png" width="300">
+  <img src="assets/dist.png" width="300">
+  <img src="assets/rms_applied.png" width="300">
+  <img src="assets/rms_pred.png" width="300">
+</p>
