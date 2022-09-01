@@ -38,7 +38,7 @@ As a post-processing step, RANSAC is applied on the rigid transformation to filt
 The performance of the network for different angles of rigid transformation between the pose graphs is summarized in the table and following figures. On a general note it can be seen that the error values increase with larger rigid transformations(Applied Rotation).
 
 
-|Evaluation Metric :arrow_down: /Applied Rotation (in degrees) :arrow_right: | 10 | 20 | 30 | 40 | 50 | 60 |
+|Evaluation Metric :arrow_down: /Applied Rotation :arrow_right: | 10&deg; | 20&deg; | 30&deg; | 40&deg; | 50&deg; | 60&deg; |
 | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- |
 | RMSE(t<sub>applied</sub>)      | 1.588     | 2.755 | 3.793 | 4.656 | 4.873 | 5.270 |
 | RMSE(t<sub>predicted</sub>)      | 1.588     | 2.755 | 3.793 | 4.656 | 4.873 | 5.270 |
