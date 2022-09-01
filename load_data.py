@@ -2,19 +2,13 @@ import numpy as np
 import numpy.ma as ma
 import torch
 import os
-import cv2
 import math
-import datetime
-import msgpack
-import glob
 import time
 import fnmatch
 from natsort import natsorted
 
 from scipy.spatial.distance import cdist
 from torch.utils.data import Dataset
-# from autolab_core import RigidTransform
-from mpl_toolkits.mplot3d import axes3d
 
 
 def mod_pose_graph(keypoints, num_keyframes):
@@ -101,25 +95,12 @@ class SparseDataset(Dataset):
         scores1 = scores1[:, indices1]
         scores2 = scores2[:, indices2]
 
-        # Fake zero desciptors and scores
-        # desc_final1 = np.zeros([256, 512])
-        # desc_final2 = np.zeros([256, 512])
-        # scores1 = np.ones([1,512])
-        # scores2 = np.ones([1, 512])
-
         # matches for sub graph
         all_matches = compute_matches(kf1,kf2)
         kf2 = mod_pose_graph(kf2, kf2.shape[0])
         
-        # print shapes
+        # print load time
         end = time.time()
-        print("Matches: ", all_matches.shape)
-        print("Kf1: ", kf1.shape)
-        print("Kf2: ", kf2.shape)
-        print("Desc1: ", desc_final1.shape)
-        print("Desc2: ", desc_final2.shape)
-        print("Scores1: ", scores1.shape)
-        print("Scores2: ", scores2.shape)
         print("Load time: ", (end-start))
 
 

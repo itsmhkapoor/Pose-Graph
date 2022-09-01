@@ -21,17 +21,15 @@ import cv2
 import imageio
 from natsort import natsorted
 
-# from models.superglueForTest import SuperGlue
-# from models.matching import Matching
-from models.utils import (AverageTimer, VideoStreamer,
-                          make_matching_plot_fast, frame2tensor)
+
+from models.matcher import Matcher
 
 torch.set_grad_enabled(False)
 
 if int(cv2.__version__[0]) < 3: # pragma: no cover
   print('Warning: OpenCV 3 is not installed')
 
-def ransac8pF(x1, x2, thresh):
+def ransacRigidH(x1, x2, thresh):
     """For RANSAC post-processing. Threshold is chosen to be 0.5m for indoor setting"""
     iter = 1000
     x1 = np.transpose(x1)
@@ -73,18 +71,18 @@ def rigidH(x, y):
     c1 = np.append(c, np.zeros([3,3]), axis=0)
     c2 = np.append(np.zeros([3,3]), c, axis=0)
     C = np.append(c1,c2, axis=1)
-    # print(C)
+    
     d_1 = np.transpose(y[0, :])
     d_2 = np.transpose(y[1, :])
 
     d = np.append(np.reshape(d_1,[3,-1]), np.reshape(d_2,[3,-1]), axis=0)
-    # print(d)
+    
     z = np.linalg.solve(C, d)
-    # print(z)
+    
     A = np.array([[z[0][0],z[1][0]],[z[3][0],z[4][0]]])
-    # print(A.shape)
+    
     t = np.array([[z[2][0]],[z[5][0]]])
-    # print(t.shape)
+    
     u, sd, vh = np.linalg.svd(A, full_matrices=True)
     R = np.matmul(u , np.matmul(np.array([[1, 0], [0, np.linalg.det(np.matmul(u,vh))]]) , vh))
     return R, t
@@ -101,7 +99,7 @@ def compute_matches(kp1, kp2):
     threshold = 0.2
     distances = cdist(kp1, kp2)
     mask_distances = ma.masked_greater(distances, threshold)
-    # print(mask_distances)
+    
     for i in range(distances.shape[0]):
         mask_distances[i, :] = ma.masked_greater(mask_distances[i, :], np.amin(mask_distances[i, :]))
     for i in range(distances.shape[1]):
@@ -144,72 +142,15 @@ def extract_score(base_folder):
 if __name__ == '__main__':
     ####################### Parse inputs #############################
     parser = argparse.ArgumentParser(
-        description='SuperGlue demo',
+        description='Pose Graph Matching',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--img_glob', type=str, default='*.png',
-                        help='Glob match if directory of images is specified (default: \'*.png\').')
-    parser.add_argument('--weights_path', type=str, default='superpoint_v1.pth',
-                        help='Path to pretrained weights file (default: superpoint_v1.pth).')
-    parser.add_argument('--nms_dist', type=int, default=4,
-                        help='Non Maximum Suppression (NMS) distance (default: 4).')
-    parser.add_argument('--conf_thresh', type=float, default=0.015,
-                        help='Detector confidence threshold (default: 0.015).')
-    parser.add_argument('--nn_thresh', type=float, default=0.7,
-                        help='Descriptor matching threshold (default: 0.7).')
-    parser.add_argument('--cuda', action='store_true',
-                        help='Use cuda GPU to speed up network processing speed (default: False)')
 
-    ########## Superglue parse ################
-    parser.add_argument(
-        '--input', type=str, default='0',
-        help='ID of a USB webcam, URL of an IP camera, '
-             'or path to an image directory or movie file')
-    parser.add_argument(
-        '--output_dir', type=str, default=None,
-        help='Directory where to write output frames (If None, no output)')
-
-    parser.add_argument(
-        '--image_glob', type=str, nargs='+', default=['*.png', '*.jpg', '*.jpeg'],
-        help='Glob if a directory of images is specified')
-    parser.add_argument(
-        '--skip', type=int, default=1,
-        help='Images to skip if input is a movie or directory')
-    parser.add_argument(
-        '--max_length', type=int, default=1000000,
-        help='Maximum length if input is a movie or directory')
-    parser.add_argument(
-        '--resize', type=int, nargs='+', default=[640, 480],
-        help='Resize the input image before running inference. If two numbers, '
-             'resize to the exact dimensions, if one number, resize the max '
-             'dimension, if -1, do not resize')
-
-    parser.add_argument(
-        '--superglue', choices={'indoor', 'outdoor'}, default='outdoor',
-        help='SuperGlue weights')
-    parser.add_argument(
-        '--max_keypoints', type=int, default=-1,
-        help='Maximum number of keypoints detected by Superpoint'
-             ' (\'-1\' keeps all keypoints)')
-    parser.add_argument(
-        '--keypoint_threshold', type=float, default=0.005,
-        help='SuperPoint keypoint detector confidence threshold')
-    parser.add_argument(
-        '--nms_radius', type=int, default=4,
-        help='SuperPoint Non Maximum Suppression (NMS) radius'
-             ' (Must be positive)')
     parser.add_argument(
         '--sinkhorn_iterations', type=int, default=20,
         help='Number of Sinkhorn iterations performed by SuperGlue')
     parser.add_argument(
         '--match_threshold', type=float, default=0.0,
         help='SuperGlue match threshold')
-
-    parser.add_argument(
-        '--show_keypoints', action='store_true',
-        help='Show the detected keypoints')
-    parser.add_argument(
-        '--no_display', action='store_true',
-        help='Do not display images to screen. Useful if running remotely')
     parser.add_argument(
         '--force_cpu', action='store_true',
         help='Force pytorch to run in CPU mode.')
@@ -219,26 +160,23 @@ if __name__ == '__main__':
 
     device = 'cuda' if torch.cuda.is_available() and not opt.force_cpu else 'cpu'
     print('Running inference on device \"{}\"'.format(device))
+    
+    """Specify model path here"""
+    model_path = "path/to/model.pth"
+    
     config = {
-        'superpoint': {
-            'nms_radius': opt.nms_radius,
-            'keypoint_threshold': opt.keypoint_threshold,
-            'max_keypoints': opt.max_keypoints
-        },
-        'superglue': {
-            'weights': opt.superglue,
+        'matcher': {
             'sinkhorn_iterations': opt.sinkhorn_iterations,
             'match_threshold': opt.match_threshold,
         }
     }
-    """Specify model path here"""
-    model_path = "../model_ckpt/seq_1_weighted_ransac/model_rand_512_L_0.05_epoch_100.pth"
-    print("Model loaded from: ",model_path)
-    # matching = SuperGlue(config.get('superglue', {}))
-    matching = torch.load(model_path)
+    matching = Matcher(config.get('matcher', {}))
+    checkpoint = torch.load(model_path) # load model checkpoint
+    matching.load_state_dict(checkpoint['model_state_dict'])
     matching.eval()
+    print("Model loaded from: ",model_path)
 
-    data_path = '/srv/beegfs-benderdata/scratch/posegraph/data/cold/freiburg/'
+    data_path = 'path/to/test/dataset'
     files = []
     files += [data_path + f for f in natsorted(os.listdir(data_path))]
     files = files[-7:-1]
@@ -298,10 +236,8 @@ if __name__ == '__main__':
 
                 }
 
-            # pred using superglue
+            # pred using matcher
             pred = matching(data)
-
-            # print matches
 
             matches = pred['matches0'].cpu().numpy()
             confidence = pred['matching_scores0'].cpu().numpy()
@@ -318,7 +254,7 @@ if __name__ == '__main__':
             match_ratio = all_matches.shape[0] / 512
 
             # Run RANSAC
-            inliers, _, _ = ransac8pF(mkpts0, mkpts1, 0.5)
+            inliers, _, _ = ransacRigidH(mkpts0, mkpts1, 0.5)
 
             val_mkp1 = mkpts0[inliers]
             val_mkp2 = mkpts1[inliers]
@@ -352,7 +288,7 @@ if __name__ == '__main__':
             plt.plot(mkpts1[:, 0], mkpts1[:, 1], 'bo')
             for i in range(mkpts0.shape[0]):
                 plt.plot([mkpts0[i, 0], mkpts1[i, 0]], [mkpts0[i, 1], mkpts1[i, 1]], color='black')
-            plt.savefig('../final_results/seq_1_weighted_ransac/0.2/30_before.png')
+            plt.savefig('../final_results/seq_1_weighted_ransac/0.2/30_before.png') # matching threshold is 0.2
             fig.clf()
             plt.ylabel('y [m]')
             plt.xlabel('x [m]')
